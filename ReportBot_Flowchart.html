@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReportBot Setup Flow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Layout: one reading column; each phase is a band with a short legend and its diagram in a scroll box */
+:root {
+  --bg: #f5f7fa; --panel: #ffffff; --ink: #14213d; --muted: #5b6b82; --line: #d9e1ec;
+  --accent: #1f3a8a; --setup: #e8eefc; --run: #e6f4ee; --teach: #fdf1e3; --stop: #fde8e8;
+  --display: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0d1424; --panel: #131c30; --ink: #e4eaf5; --muted: #95a3bb; --line: #26324a;
+  --accent: #8fb0ff; --setup: #1b2747; --run: #13302a; --teach: #3a2a17; --stop: #3b1c1f; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0d1424; --panel: #131c30; --ink: #e4eaf5; --muted: #95a3bb; --line: #26324a;
+  --accent: #8fb0ff; --setup: #1b2747; --run: #13302a; --teach: #3a2a17; --stop: #3b1c1f; color-scheme: dark }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.6 var(--display);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: grid; gap: 28px; }
+header h1 { margin: 0; font-size: clamp(24px, 4vw, 34px); color: var(--accent); text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 65ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.chip { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); }
+.c-setup { background: var(--setup); } .c-run { background: var(--run); } .c-teach { background: var(--teach); } .c-stop { background: var(--stop); }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px 20px; min-width: 0; }
+section h2 { margin: 0 0 4px; font-size: 19px; }
+section .sub { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
+.diagram { overflow-x: auto; border-top: 1px solid var(--line); padding-top: 14px; }
+.diagram pre.mermaid { margin: 0; background: transparent; text-align: center; }
+code { font-family: var(--mono); font-size: 13px; }
+footer { color: var(--muted); font-size: 13px; }
+.diagram svg { max-width: 100% !important; height: auto; }
+@media print { body { padding: 0; } section { break-inside: avoid; break-before: page; } header + section { break-before: auto; } .diagram svg { max-height: 235mm; width: auto; } }
+</style>
+</head><body>
+
+<div class="wrap">
+  <header>
+    <h1>ReportBot: from setup to daily use</h1>
+    <p>The whole journey for the Telegram and web report chatbot on MySQL with Claude, in four phases. Each step matches the numbered steps in the SOP.</p>
+    <div class="legend">
+      <span class="chip c-setup">Setup</span><span class="chip c-run">Running</span>
+      <span class="chip c-teach">Teaching reports</span><span class="chip c-stop">Problem / fix</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>1. One-time setup</h2>
+    <p class="sub">Keys, MySQL, Docker, settings, first start. Red boxes are the problems we actually hit and their fixes.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart TD
+  A([Start]) --> B["Step 1: Get keys<br/>Claude API key, BotFather token,<br/>your Telegram ID"]
+  B --> C["Step 2: MySQL Workbench<br/>CREATE DATABASE reportbot<br/>CREATE USER reportbot (read-only on ERP)"]
+  C --> D["Step 3: Install Docker Desktop<br/>restart laptop, wait for Engine running"]
+  D --> E{"docker --version<br/>works?"}
+  E -- No --> E1["Add DockerDesktop\resources\bin<br/>to Path, reopen PowerShell"]:::stop
+  E1 --> E
+  E -- Yes --> F["Step 4: Extract zip to C:\reportbot<br/>put cloudflared.exe in folder"]
+  F --> G["Step 5: copy .env.example .env<br/>fill keys, DB URLs, admin ID"]
+  G --> H["Step 6: docker compose up -d --build"]
+  H --> I{"docker compose ps<br/>STATUS = Up?"}
+  I -- "Restarting" --> I1["docker compose logs --tail 40<br/>Access denied: use reportbot user<br/>Unknown DB: create reportbot"]:::stop
+  I1 --> J["Fix .env / MySQL<br/>docker compose up -d --force-recreate"]:::stop
+  J --> I
+  I -- Up --> K["tools.manage init<br/>prints admin web link"]
+  K --> L["Test web chat on localhost:8000"]
+  L --> M([Setup done]):::setup
+  classDef stop fill:#fde8e8,stroke:#c24141,color:#5a1414;
+  classDef setup fill:#e8eefc,stroke:#1f3a8a,color:#14213d;
+    </pre></div>
+  </section>
+
+  <section>
+    <h2>2. Go live: public link, Telegram and users</h2>
+    <p class="sub">The tunnel gives the laptop an https address so Telegram and outside users can reach it.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart TD
+  A([Setup done]) --> B["Step 7: second PowerShell<br/>cloudflared tunnel --url http://localhost:8000"]
+  B --> C["Copy https://xxxx.trycloudflare.com<br/>set PUBLIC_BASE_URL in .env"]
+  C --> D["docker compose up -d --force-recreate"]
+  D --> E["tools.manage set-webhook"]
+  E --> F{"ok: True?"}
+  F -- "Failed to resolve host" --> F1["Tunnel closed or link wrong<br/>check link/health, wait 1 min"]:::stop
+  F1 --> C
+  F -- Yes --> G["Telegram: open bot, send /start"]
+  G --> H{"Registered?"}
+  H -- No --> H1["UPDATE rb_users SET telegram_id<br/>WHERE id = 1"]:::stop
+  H1 --> G
+  H -- Yes --> I["Add users: tools.manage add-user<br/>admin / manager / viewer"]
+  I --> J["Send each person their own web link<br/>or Telegram access"]
+  J --> K([Live]):::run
+  classDef stop fill:#fde8e8,stroke:#c24141,color:#5a1414;
+  classDef run fill:#e6f4ee,stroke:#1f7a52,color:#123a2a;
+    </pre></div>
+  </section>
+
+  <section>
+    <h2>3. Teaching a report</h2>
+    <p class="sub">Managers and admins teach a format once; it becomes a /command anyone allowed can run.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart TD
+  A(["/teach + description<br/>format, rules, cross-checks"]) --> B["Optional: attach existing<br/>Excel / PDF report"]
+  B --> C["Bot asks questions<br/>date column, cancelled status, units"]
+  C --> D["Bot explores tables,<br/>writes and runs SQL"]
+  D --> E["Preview table + check results"]
+  E --> F{"Matches manual report<br/>for 2-3 known dates?"}
+  F -- No --> G["Tell bot what is wrong<br/>e.g. remove transfer challans"]:::teach
+  G --> D
+  F -- Yes --> H["Say save"]
+  H --> I(["New command saved<br/>e.g. /daily_dispatch, versioned"]):::teach
+  classDef teach fill:#fdf1e3,stroke:#b4691b,color:#4a2a08;
+    </pre></div>
+  </section>
+
+  <section>
+    <h2>4. Every request and every day</h2>
+    <p class="sub">What happens when someone asks a question, and what to do after the laptop restarts.</p>
+    <div class="diagram"><pre class="mermaid">
+flowchart TD
+  U(["User message<br/>Telegram or web, any of 4 languages"]) --> R{"Registered and active?"}
+  R -- No --> X["Bot replies: not registered,<br/>shows ID for admin"]:::stop
+  R -- Yes --> S{"Starts with a taught<br/>/command?"}
+  S -- Yes --> T["Load report rules,<br/>format and cross-checks"]
+  S -- No --> V{"Role allows<br/>free questions?"}
+  V -- "Viewer" --> W["Offer list of taught reports"]
+  V -- "Manager / admin" --> Y["Find tables, write SQL"]
+  T --> Z["Read-only SELECT on venuserp_replica"]
+  Y --> Z
+  Z --> Q["Run cross-checks"]
+  Q --> O["Render: table, Excel, PDF, chart, HTML"]
+  O --> P["Save to history"]
+  P --> REPLY(["Reply with summary + files"]):::run
+
+  RS(["Laptop restarted"]) --> R1["Open Docker Desktop"]
+  R1 --> R2["Start cloudflared, copy NEW link"]
+  R2 --> R3["Update PUBLIC_BASE_URL<br/>--force-recreate, set-webhook"]
+  R3 --> R4(["Send users new address,<br/>same token"]):::run
+  classDef stop fill:#fde8e8,stroke:#c24141,color:#5a1414;
+  classDef run fill:#e6f4ee,stroke:#1f7a52,color:#123a2a;
+    </pre></div>
+  </section>
+
+  <footer>Companion to SOP-AI-BOT-001. To stop repeating phase 4's restart steps, move the bot to an always-on server with a fixed address such as reports.venuspipes.com.</footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+mermaid.initialize({ startOnLoad: true, theme: dark ? 'dark' : 'default', flowchart: { useMaxWidth: true, htmlLabels: true }, fontFamily: 'IBM Plex Sans, Segoe UI, sans-serif' });
+</script>
+</body></html>
